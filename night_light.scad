@@ -1,3 +1,5 @@
+use <lib/recessed_hinge.scad>
+
 // Battery top: schematic reconstruction from a 3D scan
 // Assumption: STL units are millimeters. Verify dimensions before designing mating parts!
 // X = width, Y = length, Z = height above the idealized cut plane.
@@ -6,10 +8,23 @@
 
 $fn = $preview ? 16 : 64;
 show_scan = false;       // Transparent reference in F5 preview only
-show_model = false;
+show_model = true;
 
 // The reference objects are preview-only so exports contain only the new part.
 show_u_bracket = true;
+show_lid = true;
+show_hinge_pin = true;
+// assembly, bracket, lid, pin, or print_layout. Angle 0 is closed.
+export_part = "assembly";
+lid_open_angle = 0;
+lid_thickness = 7.5;
+lid_gap = 0.3;
+hinge_length = 60;
+hinge_knuckle_count = 7;
+hinge_barrel_diameter = 6;
+hinge_pin_diameter = 3;
+hinge_pin_radial_clearance = 0.2;
+hinge_axial_gap = 0.3;
 
 // U-bracket dimensions in millimeters. Clearance controls the bridge height.
 bracket_clearance = 1;
@@ -102,7 +117,7 @@ module bracket_opening_profile(part, inner_width, bridge_bottom, leg_bottom) {
 // Inverted U across X, centered along Y, with its opening facing down.
 // Legs extend to the battery underside; the inner relief follows its base and shoulder.
 // Fit uses the schematic battery dimensions, not a measured scan surface.
-module u_bracket() {
+module u_bracket_body() {
     inner_width = bracket_inner_width;
     outer_width = bracket_outer_width;
     leg_bottom = 0;
@@ -200,10 +215,104 @@ module u_bracket() {
     }
 }
 
-if (show_u_bracket)
-    color([0.9,0.15,0.1]) u_bracket();
-if (show_model)
-    %color([0.2,0.55,0.75]) schematic_battery();
+// Closed hinge envelope: inside X +/-35, Y +/-43.5, top flush with lid.
+// The hinge is centered on the long negative-X edge, with its axis along Y.
+assembly_roof_z = overall_height + bracket_clearance + bracket_extra_height + bracket_wall;
+lid_bottom_z = assembly_roof_z + lid_gap;
+lid_top_z = lid_bottom_z + lid_thickness;
+hinge_radius = hinge_barrel_diameter/2;
+hinge_axis_x = -bracket_outer_width/2 + hinge_radius;
+hinge_axis_y = 0;
+hinge_axis_z = lid_top_z - hinge_radius;
+lid_side_cut_x = hinge_axis_x + hinge_radius + hinge_axial_gap;
+hinge_bore_diameter = hinge_pin_diameter + 2*hinge_pin_radial_clearance;
 
-if (show_scan)
-    %scan_reference();
+assert(hinge_length < bracket_depth-2*bracket_corner_radius,
+       "Hinge must remain centered inside the long bracket edge.");
+assert(lid_thickness >= hinge_barrel_diameter,
+       "The barrel must fit within the lid height.");
+assert(lid_open_angle >= 0 && lid_open_angle <= 110,
+       "Supported lid opening range is 0 to 110 degrees.");
+
+module hinge_pose() {
+    translate([hinge_axis_x,hinge_axis_y,hinge_axis_z])
+        rotate([0,0,-90]) children();
+}
+
+module fixed_hinge_half() {
+    hinge_pose()
+        recessed_hinge_leaf(length=hinge_length,segs=hinge_knuckle_count,
+            inner=false,knuckle_diam=hinge_barrel_diameter,
+            pin_diam=hinge_bore_diameter,gap=hinge_axial_gap,
+            web=[-1,1,assembly_roof_z-hinge_axis_z-3,0]);
+}
+
+module u_bracket() {
+    union() {
+        u_bracket_body();
+        fixed_hinge_half();
+    }
+}
+
+module upper_lid() {
+    union() {
+        difference() {
+            translate([0,0,lid_bottom_z])
+                linear_extrude(height=lid_thickness)
+                    outline(bracket_outer_width,bracket_depth,bracket_corner_radius);
+            // Leave a free band along the long hinge edge for lid rotation.
+            translate([-bracket_outer_width/2-1,-bracket_depth/2-1,lid_bottom_z-1])
+                cube([lid_side_cut_x+bracket_outer_width/2+1,bracket_depth+2,
+                      lid_thickness+2]);
+        }
+        hinge_pose()
+            recessed_hinge_leaf(length=hinge_length,segs=hinge_knuckle_count,
+                inner=true,knuckle_diam=hinge_barrel_diameter,
+                pin_diam=hinge_bore_diameter,gap=hinge_axial_gap,
+                web=[0,hinge_radius+4,0,hinge_radius]);
+    }
+}
+
+module posed_lid(angle=lid_open_angle) {
+    hinge_pose()
+        rotate([angle,0,0])
+            rotate([0,0,90])
+                translate([-hinge_axis_x,-hinge_axis_y,-hinge_axis_z]) upper_lid();
+}
+
+// A headed pin is provided as an optional printed part. A 3 mm metal rod
+// may be substituted; mechanically retain its ends after assembly.
+module loose_hinge_pin() {
+    pin_length = hinge_length + 0.8;
+    union() {
+        cylinder(h=pin_length,d=hinge_pin_diameter);
+        translate([0,0,-1.5]) cylinder(h=1.5,d=hinge_pin_diameter+2);
+    }
+}
+
+module assembled_hinge_pin() {
+    hinge_pose()
+        translate([-hinge_length/2-0.4,0,0])
+            rotate([0,90,0]) loose_hinge_pin();
+}
+
+if (export_part == "assembly") {
+    if (show_u_bracket) color([0.9,0.15,0.1]) u_bracket();
+    if (show_lid) color([0.2,0.45,0.85]) posed_lid();
+    if (show_hinge_pin) color([0.7,0.7,0.72]) assembled_hinge_pin();
+    if (show_model) %color([0.2,0.55,0.75]) schematic_battery();
+    if (show_scan) %scan_reference();
+} else if (export_part == "bracket") {
+    u_bracket();
+} else if (export_part == "lid") {
+    // Top face on the build plate, hinge barrels facing upward.
+    translate([0,0,lid_top_z]) rotate([180,0,0]) upper_lid();
+} else if (export_part == "pin") {
+    translate([0,0,1.5]) loose_hinge_pin();
+} else if (export_part == "print_layout") {
+    u_bracket();
+    translate([bracket_outer_width+15,0,lid_top_z]) rotate([180,0,0]) upper_lid();
+    translate([-bracket_outer_width/2-10,0,1.5]) loose_hinge_pin();
+} else {
+    assert(false,"Unknown export_part selector.");
+}

@@ -12,15 +12,21 @@ show_model = true;
 // The reference objects are preview-only so exports contain only the new part.
 show_u_bracket = true;
 show_lid = true;
+show_led_light = true; // Preview-only lamp reference attached to the lid.
 show_hinge_pin = true;
 // assembly, bracket, lid, pin, or print_layout. Angle 0 is closed.
 export_part = "assembly";
 lid_open_angle = 0;
 lid_thickness = 7.5;
 lid_gap = 0.3;
+show_lamp_pocket = true;
+lamp_pocket_clearance = 0.3;
+led_light_edge_offset = 5; // Distance from the hinge-side plate edge.
+lamp_pocket_wall = led_light_edge_offset - lamp_pocket_clearance; // Flush outer base.
+lamp_pocket_height = 22;
 hinge_length = 60;
 hinge_knuckle_count = 7;
-hinge_barrel_diameter = 6;
+hinge_barrel_diameter = lid_thickness; // Barrel is flush with both lid faces.
 hinge_pin_diameter = 3;
 hinge_pin_radial_clearance = 0.2;
 hinge_axial_gap = 0.3;
@@ -222,7 +228,7 @@ lid_top_z = lid_bottom_z + lid_thickness;
 hinge_radius = hinge_barrel_diameter/2;
 hinge_axis_x = -bracket_outer_width/2 + hinge_radius;
 hinge_axis_y = 0;
-hinge_axis_z = lid_top_z - hinge_radius;
+hinge_axis_z = lid_bottom_z + lid_thickness/2; // Centered bore and pivot.
 lid_side_cut_x = hinge_axis_x + hinge_radius + hinge_axial_gap;
 hinge_bore_diameter = hinge_pin_diameter + 2*hinge_pin_radial_clearance;
 
@@ -269,8 +275,66 @@ module u_bracket() {
     }
 }
 
+// Schematic lamp mounting envelope: measured horizontal section dimensions.
+// Rows are [height, rear X, front X, half length Y] after the -90 degree turn.
+// Deliberately excludes optical details and the sensor; no STL Boolean geometry.
+led_housing_sections = [
+    [-0.2,-34.5,34.5,43.2], [0,-34.5,34.5,43.2],
+    [1,-34.5,34.5,43.2], [2,-34.5,34.5,43.2],
+    [3,-34.3,34.2857,43.095], [4,-34.1,34.0714,42.9900],
+    [5,-33.9,33.8571,42.8610], [6,-33.7,33.6429,42.6849],
+    [7,-33.5,33.4286,42.4829], [8,-33.3,33.2150,42.2611],
+    [9,-33.0980,32.9557,42.0184], [10,-32.7414,32.5976,41.7551],
+    [11,-32.2241,32.2313,41.4718], [12,-31.7069,31.8652,41.1689],
+    [13,-31.1897,31.4967,40.8467], [14,-30.6724,31.1366,40.5052],
+    [15,-30.1552,30.7568,40.1445], [16,-29.4324,30.3689,39.7611],
+    [17,-28.6216,29.9571,39.3566], [18,-27.8108,29.4392,38.9288],
+    [19,-26.9898,28.8907,38.4765], [20,-25.8889,28.3139,37.9956],
+    [21,-24.7778,27.7040,37.4848], [22,-23.3077,27.0521,36.9392],
+    [23,-21.0086,26.2700,36.3525], [24,-19.0846,25.3854,35.7162]
+];
+
+// Schematic central X/Z housing section, extended uniformly along Y.
+module led_housing_mid_profile() {
+    polygon(points=concat(
+        [for (row=led_housing_sections) [row[1],row[0]]],
+        [for (i=[len(led_housing_sections)-1:-1:0])
+            [led_housing_sections[i][2],led_housing_sections[i][0]]]
+    ));
+}
+
+module schematic_led_housing() {
+    rotate([90,0,0])
+        linear_extrude(height=bracket_depth,center=true)
+            led_housing_mid_profile();
+}
+module led_mount_pose() {
+    translate([lid_side_cut_x+led_light_half_width+led_light_edge_offset,0,lid_top_z])
+        children();
+}
+
+module lamp_retaining_pocket() {
+    assert(lamp_pocket_wall > 0 && lamp_pocket_clearance >= 0);
+    assert(lamp_pocket_height > 0 && lamp_pocket_height <= 24);
+    // Only the rear contour of the central section; no lateral returns.
+    led_mount_pose()
+        rotate([90,0,0])
+            linear_extrude(height=bracket_depth,center=true)
+                intersection() {
+                    polygon(points=concat(
+                        [for (row=led_housing_sections)
+                            [row[1]-lamp_pocket_clearance-lamp_pocket_wall,row[0]]],
+                        [for (i=[len(led_housing_sections)-1:-1:0])
+                            [led_housing_sections[i][1]-lamp_pocket_clearance,
+                             led_housing_sections[i][0]]]
+                    ));
+                    translate([-80,-0.2])
+                        square([160,lamp_pocket_height+0.2]);
+                }
+}
 module upper_lid() {
     union() {
+        if (show_lamp_pocket) lamp_retaining_pocket();
         difference() {
             translate([0,0,lid_bottom_z])
                 linear_extrude(height=lid_thickness)
@@ -288,7 +352,9 @@ module upper_lid() {
                         translate([-hinge_length/2+i*(hinge_knuckle_width+hinge_axial_gap),0,0]) {
                             rotate([0,90,0])
                                 cylinder(h=hinge_knuckle_width,d=hinge_barrel_diameter);
-                            cube([hinge_knuckle_width,hinge_radius+4,hinge_radius]);
+                            // Full-depth web removes the underside step.
+                            translate([0,0,-lid_thickness/2])
+                                cube([hinge_knuckle_width,hinge_radius+4,lid_thickness]);
                         }
                 translate([-hinge_length/2-0.1,0,0])
                     rotate([0,90,0]) cylinder(h=hinge_length+0.2,d=hinge_bore_diameter);
@@ -303,6 +369,24 @@ module posed_lid(angle=lid_open_angle) {
                 translate([-hinge_axis_x,-hinge_axis_y,-hinge_axis_z]) upper_lid();
 }
 
+// The STL is centered in XY, with its base at Z0 and sensor toward +Y.
+// Rotate -90 degrees to place the sensor on +X, opposite the -X hinge.
+// Offset the lamp inward from the hinge-side edge of the flat lid plate.
+// The source STL spans Y -34.5 to +34.5, mapped onto X by the rotation.
+led_light_half_width = 34.5;
+module led_light_reference() {
+    translate([lid_side_cut_x+led_light_half_width+led_light_edge_offset,0,lid_top_z])
+        rotate([0,0,-90])
+            import("led_light.stl",convexity=10);
+}
+
+module posed_led_light(angle=lid_open_angle) {
+    hinge_pose()
+        rotate([angle,0,0])
+            rotate([0,0,90])
+                translate([-hinge_axis_x,-hinge_axis_y,-hinge_axis_z])
+                    led_light_reference();
+}
 // A headed pin is provided as an optional printed part. A 3 mm metal rod
 // may be substituted; mechanically retain its ends after assembly.
 module loose_hinge_pin() {
@@ -322,6 +406,7 @@ module assembled_hinge_pin() {
 if (export_part == "assembly") {
     if (show_u_bracket) color([0.9,0.15,0.1]) u_bracket();
     if (show_lid) color([0.2,0.45,0.85]) posed_lid();
+    if (show_lid && show_led_light) %color([1,0.75,0.15,0.8]) posed_led_light();
     if (show_hinge_pin) color([0.7,0.7,0.72]) assembled_hinge_pin();
     if (show_model) %color([0.2,0.55,0.75]) schematic_battery();
     if (show_scan) %scan_reference();

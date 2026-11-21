@@ -30,14 +30,12 @@ Printed fit depends on the printer: test the hinge before producing the full par
 The earlier 55 mm opening versus 55.5 mm schematic battery interference remains.
 PDF drawings predate the lid and hinge and must be regenerated before manufacturing.
 
-## Upstream hinge model
+## Self-contained hinge construction
 
-The alternating knuckle layout in `lib/recessed_hinge.scad` is adapted from
-[BOSL2 knuckle_hinge](https://github.com/BelfrySCAD/BOSL2/blob/450f7fa5fc5222279ca4c4e564e1a6c01ccdd57c/hinges.scad),
-under the BSD 2-Clause License. The adapter removes the BOSL2 attachment and screw
-systems and supplies new recessed mounting webs for this assembly. No external
-OpenSCAD libraries are required. The upstream license is retained in
-`third_party/BOSL2-LICENSE.txt`. The source revision is recorded in the adapter.
+All hinge geometry is constructed directly in night_light.scad with cylinders,
+attachment webs and coaxial bores. The bracket owns four even-numbered knuckles;
+the lid owns three odd-numbered knuckles. No external SCAD files or libraries
+are needed. The knuckles retain their existing dimensions and centered layout.
 
 ## Geometry validation
 

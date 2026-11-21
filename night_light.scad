@@ -1,4 +1,3 @@
-use <lib/recessed_hinge.scad>
 
 // Battery top: schematic reconstruction from a 3D scan
 // Assumption: STL units are millimeters. Verify dimensions before designing mating parts!
@@ -239,14 +238,30 @@ module hinge_pose() {
         rotate([0,0,-90]) children();
 }
 
+// Equal-width interleaved knuckles, constructed directly in this file.
+hinge_knuckle_width = (hinge_length-(hinge_knuckle_count-1)*hinge_axial_gap)
+                      / hinge_knuckle_count;
+assert(hinge_knuckle_count >= 3 && hinge_knuckle_count % 2 == 1
+       && hinge_knuckle_count == floor(hinge_knuckle_count));
+assert(hinge_knuckle_width > 0 && hinge_bore_diameter < hinge_barrel_diameter);
+
 module fixed_hinge_half() {
     hinge_pose()
-        recessed_hinge_leaf(length=hinge_length,segs=hinge_knuckle_count,
-            inner=false,knuckle_diam=hinge_barrel_diameter,
-            pin_diam=hinge_bore_diameter,gap=hinge_axial_gap,
-            web=[-1,1,assembly_roof_z-hinge_axis_z-3,0]);
+        difference() {
+            union()
+                // Even stations: four fixed red knuckles for the default count.
+                for (i=[0:2:hinge_knuckle_count-1])
+                    translate([-hinge_length/2+i*(hinge_knuckle_width+hinge_axial_gap),0,0]) {
+                        rotate([0,90,0])
+                            cylinder(h=hinge_knuckle_width,d=hinge_barrel_diameter);
+                        translate([0,-1,assembly_roof_z-hinge_axis_z-3])
+                            cube([hinge_knuckle_width,2,
+                                  hinge_axis_z-assembly_roof_z+3]);
+                    }
+            translate([-hinge_length/2-0.1,0,0])
+                rotate([0,90,0]) cylinder(h=hinge_length+0.2,d=hinge_bore_diameter);
+        }
 }
-
 module u_bracket() {
     union() {
         u_bracket_body();
@@ -265,11 +280,19 @@ module upper_lid() {
                 cube([lid_side_cut_x+bracket_outer_width/2+1,bracket_depth+2,
                       lid_thickness+2]);
         }
+        // Odd stations: three blue knuckles fused directly to the lid.
         hinge_pose()
-            recessed_hinge_leaf(length=hinge_length,segs=hinge_knuckle_count,
-                inner=true,knuckle_diam=hinge_barrel_diameter,
-                pin_diam=hinge_bore_diameter,gap=hinge_axial_gap,
-                web=[0,hinge_radius+4,0,hinge_radius]);
+            difference() {
+                union()
+                    for (i=[1:2:hinge_knuckle_count-2])
+                        translate([-hinge_length/2+i*(hinge_knuckle_width+hinge_axial_gap),0,0]) {
+                            rotate([0,90,0])
+                                cylinder(h=hinge_knuckle_width,d=hinge_barrel_diameter);
+                            cube([hinge_knuckle_width,hinge_radius+4,hinge_radius]);
+                        }
+                translate([-hinge_length/2-0.1,0,0])
+                    rotate([0,90,0]) cylinder(h=hinge_length+0.2,d=hinge_bore_diameter);
+            }
     }
 }
 

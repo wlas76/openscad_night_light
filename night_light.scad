@@ -19,12 +19,17 @@ export_part = "assembly";
 lid_open_angle = 0;
 lid_thickness = 7.5;
 lid_gap = 0.3;
+lid_slot_distance = 40; // From the inner base edge of the curved retaining wall.
+lid_slot_edge_offset = 24; // From the lower short lid edge.
+lid_slot_width = 6;
 show_lamp_pocket = true;
-lamp_pocket_clearance = 0.3;
+lamp_pocket_clearance = 0.8; // Increased by 0.5 mm for scan uncertainty.
 led_light_edge_offset = 5; // Distance from the hinge-side plate edge.
 lamp_pocket_wall = led_light_edge_offset - lamp_pocket_clearance; // Flush outer base.
 lamp_pocket_height = 22;
-hinge_length = 60;
+hinge_pin_head_height = 1.5;
+hinge_pin_end_clearance = 0.4;
+hinge_outer_end_margin = 0.5;
 hinge_knuckle_count = 7;
 hinge_barrel_diameter = lid_thickness; // Barrel is flush with both lid faces.
 hinge_pin_diameter = 3;
@@ -56,6 +61,9 @@ base_height = 6;
 body_width = 55.5;
 body_length = 87;
 bracket_depth = body_length;
+// Maximize the symmetric hinge span while keeping the entire headed pin inside.
+hinge_length = bracket_depth - 2*(hinge_pin_head_height
+               + hinge_pin_end_clearance + hinge_outer_end_margin);
 shoulder_height = 14;
 top_width = 43;
 top_length = 80;
@@ -260,9 +268,12 @@ module fixed_hinge_half() {
                     translate([-hinge_length/2+i*(hinge_knuckle_width+hinge_axial_gap),0,0]) {
                         rotate([0,90,0])
                             cylinder(h=hinge_knuckle_width,d=hinge_barrel_diameter);
-                        translate([0,-1,assembly_roof_z-hinge_axis_z-3])
-                            cube([hinge_knuckle_width,2,
-                                  hinge_axis_z-assembly_roof_z+3]);
+                        // Full-width root: flush with the outer wall, filled
+                        // toward the lid, and buried below the upper R5 bend.
+                        translate([0,-hinge_radius,
+                                   assembly_roof_z-hinge_axis_z-bracket_top_radius-1])
+                            cube([hinge_knuckle_width,hinge_barrel_diameter,
+                                  hinge_axis_z-assembly_roof_z+bracket_top_radius+1]);
                     }
             translate([-hinge_length/2-0.1,0,0])
                 rotate([0,90,0]) cylinder(h=hinge_length+0.2,d=hinge_bore_diameter);
@@ -343,6 +354,24 @@ module upper_lid() {
             translate([-bracket_outer_width/2-1,-bracket_depth/2-1,lid_bottom_z-1])
                 cube([lid_side_cut_x+bracket_outer_width/2+1,bracket_depth+2,
                       lid_thickness+2]);
+            // Through-slot, open to the positive-X plate edge.
+            slot_start_x = lid_side_cut_x + lamp_pocket_wall + lid_slot_distance;
+            assert(slot_start_x < bracket_outer_width/2);
+            assert(lid_slot_edge_offset > 0 && lid_slot_width > 0
+                   && lid_slot_edge_offset+lid_slot_width < bracket_depth);
+            // Semicircular closed end; slot_start_x remains the deepest point.
+            slot_radius = lid_slot_width/2;
+            translate([0,0,lid_bottom_z-0.1])
+                linear_extrude(height=lid_thickness+0.2)
+                    union() {
+                        translate([slot_start_x+slot_radius,
+                                   -bracket_depth/2+lid_slot_edge_offset])
+                            square([bracket_outer_width/2-slot_start_x-slot_radius+0.1,
+                                    lid_slot_width]);
+                        translate([slot_start_x+slot_radius,
+                                   -bracket_depth/2+lid_slot_edge_offset+slot_radius])
+                            circle(r=slot_radius);
+                    }
         }
         // Odd stations: three blue knuckles fused directly to the lid.
         hinge_pose()
@@ -390,16 +419,16 @@ module posed_led_light(angle=lid_open_angle) {
 // A headed pin is provided as an optional printed part. A 3 mm metal rod
 // may be substituted; mechanically retain its ends after assembly.
 module loose_hinge_pin() {
-    pin_length = hinge_length + 0.8;
+    pin_length = hinge_length + 2*hinge_pin_end_clearance;
     union() {
         cylinder(h=pin_length,d=hinge_pin_diameter);
-        translate([0,0,-1.5]) cylinder(h=1.5,d=hinge_pin_diameter+2);
+        translate([0,0,-hinge_pin_head_height]) cylinder(h=hinge_pin_head_height,d=hinge_pin_diameter+2);
     }
 }
 
 module assembled_hinge_pin() {
     hinge_pose()
-        translate([-hinge_length/2-0.4,0,0])
+        translate([-hinge_length/2-hinge_pin_end_clearance,0,0])
             rotate([0,90,0]) loose_hinge_pin();
 }
 
@@ -416,11 +445,11 @@ if (export_part == "assembly") {
     // Top face on the build plate, hinge barrels facing upward.
     translate([0,0,lid_top_z]) rotate([180,0,0]) upper_lid();
 } else if (export_part == "pin") {
-    translate([0,0,1.5]) loose_hinge_pin();
+    translate([0,0,hinge_pin_head_height]) loose_hinge_pin();
 } else if (export_part == "print_layout") {
     u_bracket();
     translate([bracket_outer_width+15,0,lid_top_z]) rotate([180,0,0]) upper_lid();
-    translate([-bracket_outer_width/2-10,0,1.5]) loose_hinge_pin();
+    translate([-bracket_outer_width/2-10,0,hinge_pin_head_height]) loose_hinge_pin();
 } else {
     assert(false,"Unknown export_part selector.");
 }

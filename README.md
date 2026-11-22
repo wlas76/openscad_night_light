@@ -28,7 +28,7 @@ print orientation. A metal rod is an alternative to the printed headed pin.
 Retain the pin mechanically after assembly; an end retainer is not yet modeled.
 Printed fit depends on the printer: test the hinge before producing the full part.
 The earlier 55 mm opening versus 55.5 mm schematic battery interference remains.
-PDF drawings predate the lid and hinge and must be regenerated before manufacturing.
+The PDF drawings document the nominal battery, current lid, bracket and connecting pin dimensions.
 
 ## Self-contained hinge construction
 
@@ -57,11 +57,21 @@ The measured schematic section parameters, not the STL mesh, define the curve.
 `schematic_led_housing()` provides the corresponding prismatic construction model.
 `led_light.stl` remains preview-only.
 
-- `lamp_pocket_wall = led_light_edge_offset - lamp_pocket_clearance`: wall thickness, currently 4.7 mm; the outer base is flush with the hinge-side lid edge.
-- `lamp_pocket_clearance = 0.3`: horizontal clearance to the central profile.
+- `lamp_pocket_wall = led_light_edge_offset - lamp_pocket_clearance`: wall thickness, currently 4.2 mm; the outer base is flush with the hinge-side lid edge.
+- `lamp_pocket_clearance = 0.8`: horizontal clearance to the central profile, increased by 0.5 mm to allow for scan uncertainty.
 - `lamp_pocket_height = 22`: wall height above the lid.
 - `show_lamp_pocket`: include or hide the retaining wall.
 
 The wall follows the lamp placement and lid motion. Its contour is constant over
 its full width, so it does not follow the lamp's rounded side ends. Verify the
-physical fit before printing. Existing lid drawings predate this retaining wall.
+physical fit before printing. The lid drawing includes the retaining wall with approximately dimensioned curvature.
+
+## Hinge span and pin envelope
+
+The seven knuckles now span 82.2 mm, centered along the 87 mm bracket edge.
+Four bracket knuckles and three lid knuckles retain the 0.3 mm axial gaps.
+The span is derived from the edge length, 1.5 mm pin head height, 0.4 mm end
+clearance per side and 0.5 mm minimum outer margin. The pin head ends 0.5 mm
+inside one short bracket edge; the shaft end remains 2 mm inside the opposite
+edge. The knuckle pattern itself remains symmetric. The pin length and placement
+follow these parameters automatically. The current lid and bracket drawings include this span.
